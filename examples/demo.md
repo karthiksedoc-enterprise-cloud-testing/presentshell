@@ -1,72 +1,222 @@
-# Welcome to PresentShell
+# PresentShell
 
-A terminal-based presentation tool with live demos!
+### A Terminal-Based Presentation Tool
 
-- **Left pane**: Your slides in beautiful markdown
-- **Right pane**: A live terminal for demonstrations
+> Present slides and run live demos — all from your terminal.
 
-Press `→` or `n` to go to the next slide.
+**Built with Go + Charm ecosystem**
+
+Press `→` or `n` to begin...
 
 ---
 
-## Navigation
+## 🎯 The Problem
+
+Traditional presentation tools:
+
+- ❌ Can't run live code demos
+- ❌ Require switching between apps
+- ❌ Break your flow as a developer
+- ❌ Don't work well over SSH
+
+**PresentShell** solves this with a split-pane layout:
+slides on the left, live terminal on the right.
+
+---
+
+## ⌨️ Navigation
 
 | Key | Action |
 |-----|--------|
-| `Tab` | Switch focus between slides and terminal |
+| `Tab` | Switch focus (slides ↔ terminal) |
 | `→` / `n` | Next slide |
 | `←` / `p` | Previous slide |
-| `q` | Quit (when slides are focused) |
+| `q` | Quit (when slides focused) |
+| `Ctrl+C` | Force quit |
+
+> 💡 When the terminal is focused, all keys go to the shell!
 
 ---
 
-## Live Demo
+## 📝 Writing Slides
 
-Switch to the terminal pane with `Tab` and try:
+Slides are plain **Markdown** files separated by `---`:
 
-```bash
-echo "Hello from PresentShell!"
-ls -la
+```markdown
+# First Slide
+
+Content here...
+
+---
+
+## Second Slide
+
+More content...
 ```
 
-The terminal is a **real shell** — you can SSH into servers,
-run scripts, or demonstrate anything!
+That's it! No special syntax needed.
 
 ---
 
-## Code Highlighting
+## 🖥 Live Terminal Demo
 
-PresentShell renders code with syntax highlighting:
+Switch to the terminal with `Tab` and try:
 
-```go
-package main
+```bash
+# Check system info
+uname -a
 
-import "fmt"
+# List files
+ls -la
 
-func main() {
-    fmt.Println("Hello, PresentShell!")
+# Run a script
+echo "Hello from PresentShell! 🚀"
+```
+
+The right pane is a **real PTY** — run anything you want.
+
+---
+
+## 🐳 Docker Demo
+
+You can demo containerized apps live:
+
+```bash
+# Pull and run a container
+docker run --rm -it alpine sh
+
+# Or show docker compose
+docker compose up -d
+docker compose ps
+```
+
+Your audience sees exactly what you see!
+
+---
+
+## 🔗 SSH Into Servers
+
+Perfect for ops/infra presentations:
+
+```bash
+# Connect to a remote server
+ssh user@production-server
+
+# Show live metrics
+htop
+
+# Check logs
+tail -f /var/log/app.log
+```
+
+No more pre-recorded terminal GIFs!
+
+---
+
+## 🐍 Python Example
+
+```python
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+async def root():
+    return {"message": "Hello World"}
+
+@app.get("/items/{item_id}")
+async def read_item(item_id: int):
+    return {"item_id": item_id}
+```
+
+Try running it in the terminal →
+
+---
+
+## 🦀 Rust Example
+
+```rust
+use actix_web::{web, App, HttpServer};
+
+async fn hello() -> &'static str {
+    "Hello from Rust!"
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    HttpServer::new(|| {
+        App::new().route("/", web::get().to(hello))
+    })
+    .bind("127.0.0.1:8080")?
+    .run()
+    .await
 }
 ```
 
 ---
 
-## Features
+## 🏗 Architecture
 
-- ✅ Markdown rendering with Glamour
-- ✅ Syntax highlighting for code blocks
-- ✅ Split-pane layout
-- ✅ Embedded terminal (PTY)
-- ✅ Keyboard navigation
-- ✅ Responsive to window resize
+```
+┌─────────────────────────────────────────┐
+│            PresentShell                  │
+├───────────────────┬─────────────────────┤
+│   Slide Pane      │   Terminal Pane      │
+│                   │                      │
+│  ┌─────────────┐  │  ┌───────────────┐  │
+│  │  Glamour    │  │  │   PTY Shell   │  │
+│  │  Rendered   │  │  │   (creack/pty)│  │
+│  │  Markdown   │  │  │               │  │
+│  └─────────────┘  │  └───────────────┘  │
+│                   │                      │
+├───────────────────┴─────────────────────┤
+│  Status Bar: Slide 10/12 │ Tab:switch   │
+└─────────────────────────────────────────┘
+```
 
 ---
 
-# Thank You!
+## 📦 Tech Stack
 
-Built with ❤️ using:
-- **Bubbletea** — TUI framework
-- **Lipgloss** — Terminal styling
-- **Glamour** — Markdown rendering
-- **creack/pty** — Pseudo-terminal
+| Component | Library |
+|-----------|---------|
+| TUI Framework | `bubbletea` (Elm architecture) |
+| Styling | `lipgloss` (CSS-like) |
+| Markdown | `glamour` (terminal renderer) |
+| Terminal | `creack/pty` (pseudo-terminal) |
+| Language | **Go** (single binary) |
+
+All from the [Charm](https://charm.sh) ecosystem 🪄
+
+---
+
+## 🚀 Getting Started
+
+```bash
+# Install
+go install github.com/karthik/presentshell@latest
+
+# Run with a presentation file
+presentshell my-talk.md
+
+# Or use the demo
+presentshell examples/demo.md
+```
+
+Write your slides in any text editor,
+present from any terminal. Simple.
+
+---
+
+# 🙏 Thank You!
+
+**PresentShell** — Present like a developer.
+
+- 📖 Slides are just Markdown
+- 🖥 Live terminal built-in
+- 🎨 Beautiful rendering
+- 📦 Single binary, no dependencies
 
 > "The best demo is a live demo."
+
+*Questions? Switch to the terminal and let's explore!*
