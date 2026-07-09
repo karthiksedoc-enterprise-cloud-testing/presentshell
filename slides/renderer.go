@@ -2,37 +2,44 @@ package slides
 
 import (
 	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/glamour/styles"
 )
 
 // Renderer renders markdown slides to styled terminal output.
 type Renderer struct {
-	width int
+	width    int
+	renderer *glamour.TermRenderer
 }
 
 // NewRenderer creates a renderer with the given width constraint.
 func NewRenderer(width int) *Renderer {
-	return &Renderer{width: width}
+	r := &Renderer{width: width}
+	r.buildRenderer()
+	return r
 }
 
-// SetWidth updates the rendering width.
+// SetWidth updates the rendering width and rebuilds the internal renderer.
 func (r *Renderer) SetWidth(width int) {
-	r.width = width
+	if width != r.width {
+		r.width = width
+		r.buildRenderer()
+	}
+}
+
+func (r *Renderer) buildRenderer() {
+	tr, err := glamour.NewTermRenderer(
+		glamour.WithStyles(styles.DarkStyleConfig),
+		glamour.WithWordWrap(r.width-4),
+	)
+	if err == nil {
+		r.renderer = tr
+	}
 }
 
 // Render converts markdown content to styled terminal output.
 func (r *Renderer) Render(markdown string) (string, error) {
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(r.width-4), // padding
-	)
-	if err != nil {
-		return "", err
+	if r.renderer == nil {
+		return markdown, nil
 	}
-
-	out, err := renderer.Render(markdown)
-	if err != nil {
-		return "", err
-	}
-
-	return out, nil
+	return r.renderer.Render(markdown)
 }
