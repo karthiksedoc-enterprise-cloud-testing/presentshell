@@ -41,7 +41,7 @@ func initialModel(filepath string) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(tea.EnterAltScreen, tickCmd())
+	return tickCmd()
 }
 
 func tickCmd() tea.Cmd {
@@ -91,55 +91,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+
 	// If terminal is focused, forward keys to PTY (except Tab)
 	if m.layout.FocusedPane == ui.TerminalPane {
-		switch msg.Type {
-		case tea.KeyTab:
+		if key == "tab" {
 			m.layout.FocusedPane = ui.SlidePane
 			return m, nil
-		default:
-			if m.term != nil {
-				input := keyToBytes(msg)
-				if len(input) > 0 {
-					m.term.Write(input)
-				}
-			}
-			return m, nil
 		}
+		// Forward all other keys to the terminal
+		if m.term != nil {
+			input := keyToBytes(msg)
+			if len(input) > 0 {
+				m.term.Write(input)
+			}
+		}
+		return m, nil
 	}
 
 	// Slide pane is focused
-	switch msg.Type {
-	case tea.KeyTab:
+	switch key {
+	case "tab":
 		m.layout.FocusedPane = ui.TerminalPane
 		return m, nil
-
-	case tea.KeyRight:
+	case "right", "l", "n":
 		m.nextSlide()
 		return m, nil
-
-	case tea.KeyLeft:
+	case "left", "h", "p":
 		m.prevSlide()
 		return m, nil
-
-	case tea.KeyCtrlC:
+	case "q", "ctrl+c":
 		if m.term != nil {
 			m.term.Close()
 		}
 		return m, tea.Quit
-
-	case tea.KeyRunes:
-		switch string(msg.Runes) {
-		case "q":
-			if m.term != nil {
-				m.term.Close()
-			}
-			return m, tea.Quit
-		case "n":
-			m.nextSlide()
-		case "p":
-			m.prevSlide()
-		}
 	}
 
 	return m, nil
@@ -263,7 +248,6 @@ func main() {
 	p := tea.NewProgram(
 		initialModel(filepath),
 		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
 	)
 
 	if _, err := p.Run(); err != nil {
