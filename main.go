@@ -80,8 +80,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		if m.term != nil {
-			raw := m.term.Read()
-			m.termOutput = sanitizeOutput(string(raw))
+			m.termOutput = m.term.Content()
 		}
 		return m, tickCmd()
 
@@ -217,11 +216,6 @@ func keyToBytes(msg tea.KeyMsg) []byte {
 	default:
 		return nil
 	}
-}
-
-func sanitizeOutput(s string) string {
-	s = strings.ReplaceAll(s, "\x1b]0;", "")
-	return s
 }
 
 func getLastLines(s string, n int) string {

@@ -7,17 +7,17 @@ import (
 	"sync"
 
 	"github.com/creack/pty"
+	"github.com/hinshun/vt10x"
 )
 
-// Terminal manages a pseudo-terminal session.
+// Terminal manages a pseudo-terminal session with VT100 emulation.
 type Terminal struct {
 	ptmx    *os.File
 	cmd     *exec.Cmd
+	vt      vt10x.Terminal
 	mu      sync.Mutex
-	rows    uint16
-	cols    uint16
-	output  []byte
-	maxBuf  int
+	rows    int
+	cols    int
 	running bool
 }
 
@@ -39,34 +39,35 @@ func New(rows, cols uint16) (*Terminal, error) {
 		return nil, err
 	}
 
+	// Create virtual terminal emulator
+	vt := vt10x.New(
+		vt10x.WithWriter(ptmx),
+		vt10x.WithSize(int(cols), int(rows)),
+	)
+
 	t := &Terminal{
 		ptmx:    ptmx,
 		cmd:     cmd,
-		rows:    rows,
-		cols:    cols,
-		output:  make([]byte, 0, 4096),
-		maxBuf:  32 * 1024, // 32KB buffer
+		vt:      vt,
+		rows:    int(rows),
+		cols:    int(cols),
 		running: true,
 	}
 
-	// Read PTY output in background
+	// Read PTY output and feed to VT emulator
 	go t.readLoop()
 
 	return t, nil
 }
 
-// readLoop continuously reads from the PTY.
+// readLoop continuously reads from the PTY and feeds data to the VT emulator.
 func (t *Terminal) readLoop() {
-	buf := make([]byte, 1024)
+	buf := make([]byte, 4096)
 	for {
 		n, err := t.ptmx.Read(buf)
 		if n > 0 {
 			t.mu.Lock()
-			t.output = append(t.output, buf[:n]...)
-			// Trim buffer if too large
-			if len(t.output) > t.maxBuf {
-				t.output = t.output[len(t.output)-t.maxBuf:]
-			}
+			t.vt.Write(buf[:n])
 			t.mu.Unlock()
 		}
 		if err != nil {
@@ -83,20 +84,19 @@ func (t *Terminal) Write(data []byte) (int, error) {
 	return t.ptmx.Write(data)
 }
 
-// Read returns the current terminal output buffer.
-func (t *Terminal) Read() []byte {
+// Content returns the current terminal screen as a string.
+func (t *Terminal) Content() string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	out := make([]byte, len(t.output))
-	copy(out, t.output)
-	return out
+	return t.vt.String()
 }
 
 // Resize updates the terminal dimensions.
 func (t *Terminal) Resize(rows, cols uint16) error {
 	t.mu.Lock()
-	t.rows = rows
-	t.cols = cols
+	t.rows = int(rows)
+	t.cols = int(cols)
+	t.vt.Resize(int(cols), int(rows))
 	t.mu.Unlock()
 
 	return pty.Setsize(t.ptmx, &pty.Winsize{
@@ -120,12 +120,12 @@ func (t *Terminal) Close() error {
 	return t.ptmx.Close()
 }
 
-// Fd returns the file descriptor of the PTY master for use with readers.
+// Fd returns the file descriptor of the PTY master.
 func (t *Terminal) Fd() uintptr {
 	return t.ptmx.Fd()
 }
 
-// File returns the PTY master file for use with io.Reader.
+// File returns the PTY master file.
 func (t *Terminal) File() io.Reader {
 	return t.ptmx
 }

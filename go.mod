@@ -7,6 +7,7 @@ require (
 	github.com/charmbracelet/glamour v0.8.0
 	github.com/charmbracelet/lipgloss v1.0.0
 	github.com/creack/pty v1.1.23
+	github.com/hinshun/vt10x v0.0.0-20220301184237-5011da428d02
 )
 
 require (
