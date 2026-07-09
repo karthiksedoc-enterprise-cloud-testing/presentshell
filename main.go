@@ -15,58 +15,61 @@ import (
 // tickMsg triggers periodic terminal output refresh.
 type tickMsg time.Time
 
-// Model is the main application model.
-type Model struct {
-	presentation *slides.Presentation
-	renderer     *slides.Renderer
-	term         *terminal.Terminal
-	layout       *ui.Layout
-	currentSlide int
-	termOutput   string
-	ready        bool
-	err          error
-}
-
-func initialModel(filepath string) Model {
-	pres, err := slides.Load(filepath)
-	if err != nil {
-		return Model{err: err}
-	}
-
-	return Model{
-		presentation: pres,
-		renderer:     slides.NewRenderer(40),
-		layout:       ui.NewLayout(80, 24),
-	}
-}
-
-func (m Model) Init() tea.Cmd {
-	return tickCmd()
-}
-
 func tickCmd() tea.Cmd {
 	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
 		return tickMsg(t)
 	})
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+// model is the main application model.
+type model struct {
+	presentation *slides.Presentation
+	renderer     *slides.Renderer
+	term         *terminal.Terminal
+	layout       *ui.Layout
+	currentSlide int
+	totalSlides  int
+	termOutput   string
+	ready        bool
+	quitting     bool
+	err          error
+}
+
+func newModel(filepath string) model {
+	pres, err := slides.Load(filepath)
+	if err != nil {
+		return model{err: err}
+	}
+
+	return model{
+		presentation: pres,
+		renderer:     slides.NewRenderer(40),
+		layout:       ui.NewLayout(80, 24),
+		totalSlides:  len(pres.Slides),
+	}
+}
+
+func (m model) Init() tea.Cmd {
+	return tickCmd()
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+
 	case tea.WindowSizeMsg:
 		m.layout.Width = msg.Width
 		m.layout.Height = msg.Height
 		m.renderer.SetWidth(m.layout.LeftWidth() - 4)
 
 		if !m.ready {
-			// Start terminal with right pane dimensions
 			cols := uint16(m.layout.RightWidth() - 4)
 			rows := uint16(m.layout.ContentHeight() - 2)
-			term, err := terminal.New(rows, cols)
+			t, err := terminal.New(rows, cols)
 			if err != nil {
 				m.err = err
 				return m, tea.Quit
 			}
-			m.term = term
+			m.term = t
 			m.ready = true
 		} else if m.term != nil {
 			cols := uint16(m.layout.RightWidth() - 4)
@@ -76,7 +79,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		// Refresh terminal output
 		if m.term != nil {
 			raw := m.term.Read()
 			m.termOutput = sanitizeOutput(string(raw))
@@ -84,76 +86,73 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tickCmd()
 
 	case tea.KeyMsg:
-		return m.handleKey(msg)
-	}
-
-	return m, nil
-}
-
-func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-
-	// If terminal is focused, forward keys to PTY (except Tab)
-	if m.layout.FocusedPane == ui.TerminalPane {
-		if key == "tab" {
-			m.layout.FocusedPane = ui.SlidePane
-			return m, nil
-		}
-		// Forward all other keys to the terminal
-		if m.term != nil {
-			input := keyToBytes(msg)
-			if len(input) > 0 {
-				m.term.Write(input)
+		// --- Terminal pane focused: forward everything except Tab ---
+		if m.layout.FocusedPane == ui.TerminalPane {
+			switch msg.String() {
+			case "tab":
+				m.layout.FocusedPane = ui.SlidePane
+				return m, nil
+			default:
+				if m.term != nil {
+					if b := keyToBytes(msg); len(b) > 0 {
+						m.term.Write(b)
+					}
+				}
+				return m, nil
 			}
 		}
-		return m, nil
-	}
 
-	// Slide pane is focused
-	switch key {
-	case "tab":
-		m.layout.FocusedPane = ui.TerminalPane
-		return m, nil
-	case "right", "l", "n":
-		m.nextSlide()
-		return m, nil
-	case "left", "h", "p":
-		m.prevSlide()
-		return m, nil
-	case "q", "ctrl+c":
-		if m.term != nil {
-			m.term.Close()
+		// --- Slide pane focused ---
+		switch msg.String() {
+		case "tab":
+			m.layout.FocusedPane = ui.TerminalPane
+			return m, nil
+
+		case "right", "l", "n", " ":
+			if m.currentSlide < m.totalSlides-1 {
+				m.currentSlide++
+			}
+			return m, nil
+
+		case "left", "h", "p":
+			if m.currentSlide > 0 {
+				m.currentSlide--
+			}
+			return m, nil
+
+		case "q", "esc":
+			m.quitting = true
+			if m.term != nil {
+				m.term.Close()
+			}
+			return m, tea.Quit
+
+		case "ctrl+c":
+			m.quitting = true
+			if m.term != nil {
+				m.term.Close()
+			}
+			return m, tea.Quit
 		}
-		return m, tea.Quit
 	}
 
 	return m, nil
 }
 
-func (m *Model) nextSlide() {
-	if m.presentation != nil && m.currentSlide < len(m.presentation.Slides)-1 {
-		m.currentSlide++
+func (m model) View() string {
+	if m.quitting {
+		return ""
 	}
-}
-
-func (m *Model) prevSlide() {
-	if m.currentSlide > 0 {
-		m.currentSlide--
-	}
-}
-
-func (m Model) View() string {
 	if m.err != nil {
-		return fmt.Sprintf("Error: %v\nPress any key to exit.", m.err)
+		return fmt.Sprintf("\n  Error: %v\n\n  Press Ctrl+C to exit.\n", m.err)
 	}
-
 	if !m.ready {
-		return "Initializing..."
+		return "\n  Initializing PresentShell...\n"
 	}
 
-	// Render current slide
+	// Render current slide markdown
 	slideContent := ""
-	if m.presentation != nil && len(m.presentation.Slides) > 0 {
+	if m.totalSlides > 0 {
 		rendered, err := m.renderer.Render(m.presentation.Slides[m.currentSlide])
 		if err != nil {
 			slideContent = m.presentation.Slides[m.currentSlide]
@@ -162,10 +161,10 @@ func (m Model) View() string {
 		}
 	}
 
-	// Get terminal content (last N lines)
+	// Terminal output (last N lines)
 	termContent := getLastLines(m.termOutput, m.layout.ContentHeight()-2)
 
-	// Render split view
+	// Split view
 	view := m.layout.RenderSplitView(
 		slideContent,
 		termContent,
@@ -173,10 +172,10 @@ func (m Model) View() string {
 		"🖥  Terminal",
 	)
 
-	// Add status bar
+	// Status bar
 	statusBar := ui.RenderStatusBar(
 		m.currentSlide,
-		len(m.presentation.Slides),
+		m.totalSlides,
 		m.layout.FocusedPane,
 		m.layout.Width,
 	)
@@ -184,7 +183,7 @@ func (m Model) View() string {
 	return view + "\n" + statusBar
 }
 
-// keyToBytes converts a tea.KeyMsg to bytes for the PTY.
+// keyToBytes converts a key event to raw bytes for the PTY.
 func keyToBytes(msg tea.KeyMsg) []byte {
 	switch msg.Type {
 	case tea.KeyEnter:
@@ -220,14 +219,11 @@ func keyToBytes(msg tea.KeyMsg) []byte {
 	}
 }
 
-// sanitizeOutput strips problematic escape sequences for display.
 func sanitizeOutput(s string) string {
-	// Keep ANSI colors but strip title-setting sequences
 	s = strings.ReplaceAll(s, "\x1b]0;", "")
 	return s
 }
 
-// getLastLines returns the last n lines of a string.
 func getLastLines(s string, n int) string {
 	lines := strings.Split(s, "\n")
 	if len(lines) > n {
@@ -246,8 +242,9 @@ func main() {
 	filepath := os.Args[1]
 
 	p := tea.NewProgram(
-		initialModel(filepath),
+		newModel(filepath),
 		tea.WithAltScreen(),
+		tea.WithInputTTY(),
 	)
 
 	if _, err := p.Run(); err != nil {
