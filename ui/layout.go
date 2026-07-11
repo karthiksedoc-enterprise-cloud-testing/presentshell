@@ -53,9 +53,9 @@ func (l *Layout) RenderSplitView(leftContent, rightContent, leftTitle, rightTitl
 	rightW := l.RightWidth() - 2 // account for border
 	contentH := l.ContentHeight()
 
-	// Build left pane (slides - vertically centered)
+	// Build left pane (slides - centered both vertically and horizontally)
 	leftTitleStr := SlideTitleStyle.Render(leftTitle)
-	leftBody := padOrTruncate(leftContent, leftW, contentH-1, true)
+	leftBody := lipgloss.Place(leftW, contentH-1, lipgloss.Center, lipgloss.Center, leftContent)
 	leftFull := leftTitleStr + "\n" + leftBody
 
 	// Build right pane (terminal - top aligned)
