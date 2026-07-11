@@ -53,14 +53,14 @@ func (l *Layout) RenderSplitView(leftContent, rightContent, leftTitle, rightTitl
 	rightW := l.RightWidth() - 2 // account for border
 	contentH := l.ContentHeight()
 
-	// Build left pane
+	// Build left pane (slides - vertically centered)
 	leftTitleStr := SlideTitleStyle.Render(leftTitle)
-	leftBody := padOrTruncate(leftContent, leftW, contentH-1)
+	leftBody := padOrTruncate(leftContent, leftW, contentH-1, true)
 	leftFull := leftTitleStr + "\n" + leftBody
 
-	// Build right pane
+	// Build right pane (terminal - top aligned)
 	rightTitleStr := TerminalTitleStyle.Render(rightTitle)
-	rightBody := padOrTruncate(rightContent, rightW, contentH-1)
+	rightBody := padOrTruncate(rightContent, rightW, contentH-1, false)
 	rightFull := rightTitleStr + "\n" + rightBody
 
 	// Apply border styles based on focus
@@ -80,17 +80,38 @@ func (l *Layout) RenderSplitView(leftContent, rightContent, leftTitle, rightTitl
 }
 
 // padOrTruncate ensures content fits within width x height.
-func padOrTruncate(content string, width, height int) string {
+// If centerVertical is true, content is vertically centered.
+func padOrTruncate(content string, width, height int, centerVertical bool) string {
 	lines := strings.Split(content, "\n")
 
-	// Truncate to height
-	if len(lines) > height {
-		lines = lines[len(lines)-height:]
+	// Remove trailing empty lines for accurate content height
+	for len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+		lines = lines[:len(lines)-1]
 	}
 
-	// Pad to height
-	for len(lines) < height {
-		lines = append(lines, "")
+	// Truncate to height if too tall
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+
+	if centerVertical && len(lines) < height {
+		// Center vertically: add padding above
+		topPad := (height - len(lines)) / 2
+		padded := make([]string, 0, height)
+		for i := 0; i < topPad; i++ {
+			padded = append(padded, "")
+		}
+		padded = append(padded, lines...)
+		// Fill remaining below
+		for len(padded) < height {
+			padded = append(padded, "")
+		}
+		lines = padded
+	} else {
+		// Pad to height at bottom
+		for len(lines) < height {
+			lines = append(lines, "")
+		}
 	}
 
 	// Truncate each line to width
